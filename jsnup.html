@@ -1,0 +1,124 @@
+<html>
+
+<head>
+    <meta charset="utf-8" />
+    <script src="pdf-lib.js"></script>
+</head>
+
+<body>
+    <h1>2up PDFs</h1>
+    <div id="upload" style="width: 100%; margin: 3em auto 3em auto">
+        <input type="file" id="input" multiple>
+    </div>
+    <div id="preview">
+        <!-- <ul id="ul-preview">
+
+        </ul> -->
+        <!-- <iframe id="pdf" style="width: 100%; height: 50%"></iframe> -->
+    </div>
+</body>
+
+<script>
+    const preview = document.getElementById("preview")
+    const inputElement = document.getElementById("input");
+    inputElement.addEventListener("change", handleFiles, false);
+    
+    function handleFiles() {
+        const fileList = this.files; /* now you can work with the file list */
+
+        const p = document.createElement("p")
+        let d = new Date();
+        p.innerText = d.toString();
+        preview.appendChild(p)
+        const ul = document.createElement("ul")
+        preview.appendChild(ul)
+
+        for (let i = 0; i < fileList.length; i++){
+            const file = fileList[i];
+
+            if (file.type != 'application/pdf') { continue }
+
+            // const iframe = document.createElement("iframe");
+            // iframe.classList.add("obj")
+            // iframe.file = file;
+            // iframe.style = "width: 100%; height: 50%;"
+            // preview.appendChild(iframe);
+            const li = document.createElement("li")
+            li.classList.add("obj")
+            li.file = file;
+            ul.appendChild(li)
+
+            const reader = new FileReader();
+            reader.onload = twoup(file, li)
+            reader.readAsDataURL(file);
+        }
+    };
+
+    async function twoup(pdfFile, li) {
+        const PDFDocument = PDFLib.PDFDocument
+
+        // get binary of pdf
+        const pdfFileBytes = await pdfFile.arrayBuffer()
+
+        // get PDFDocument object
+        const pdfSrc = await PDFDocument.load(pdfFileBytes)
+
+        // check pages
+        // const pageCount = pdfSrc.getPageCount()
+        // if (pageCount % 2 == 1){
+        //     console.log('added blank')
+        //     const { width, height } = pdfSrc.getPage(1).getSize()
+        //     pdfSrc.addPage([width, height])
+        // }
+
+        // twoup
+        const pdfDoc = await PDFDocument.create();
+
+        const newPageCount = pdfSrc.getPageCount()
+        for (let j = 0; j < newPageCount; j = j + 2) {
+            console.log(j)
+            const [page1] = await pdfDoc.copyPages(pdfSrc, [j])
+            if (j == newPageCount - 1) {
+                let newPage1 = pdfDoc.addPage(page1)
+                newPage1.setSize(page1.getWidth() *2, page1.getHeight())
+                continue
+            }
+            const [page2] = await pdfDoc.copyPages(pdfSrc, [j + 1])
+            // const page2 = pdfDoc.copyPages(pdfSrc,[k])
+            // const [page1, page2] = pdfDoc.copyPages(pdfSrc, [j, k])
+            // console.log(page2.node.Contents())
+            // page2.drawLine({
+            //     start: {x:0, y:0},
+            //     end: {x:0, y:0},
+            //     thickness: 0,
+            //     opacity: 0,
+            // })
+            
+
+            let newPage1 = pdfDoc.addPage(page1)
+            // check if page2 is empty before embedding
+            if (page2.node.Contents()) {
+                const embedPage = await pdfDoc.embedPage(page2)
+                newPage1.drawPage(embedPage, {x:newPage1.getWidth()})
+                newPage1.setSize(page1.getWidth() + page2.getWidth(), page1.getHeight())
+            }
+            else {
+                newPage1.setSize(page1.getWidth() * 2, page1.getHeight());
+            }  
+        }
+
+        // save
+        // const pdfDataUri = await pdfDoc.saveAsBase64({ dataUri: true });
+        // iframe.src = pdfDataUri
+        const pdfBytes = await pdfDoc.save()
+        const outBlob = new Blob([pdfBytes], {type: 'application/pdf'})
+        // set outBlob name
+        let filename = pdfFile.name
+        let newname = filename.replace('.pdf', '-2up.pdf')
+        outBlob.name = newname
+
+        const newLink = URL.createObjectURL(outBlob);
+        li.innerHTML = `<a href="${newLink}" download="${newname}" target="_blank">${newname}</a>`
+    }
+</script>
+</html>
